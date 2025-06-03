@@ -16,19 +16,25 @@ def draw_tag(frame, tag):
     cv2.circle(frame, center, 5, (0, 0, 255), -1)
 
 def process_frame(frame, detector):
-    """Обрабатывает кадр, детектируя AprilTags и возвращая наибольший по площади тег."""
+    """Обрабатывает кадр, детектируя AprilTags и возвращая наибольший по площади тег для каждого id."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     tags = detector.detect(gray)
 
     max_area = 0
     largest_tag = None
-    for tag in tags:
-        area = calculate_tag_area(tag)
-        if area > max_area:
-            max_area = area
-            largest_tag = tag
+    largest_tags = {}  # ключ: tag_id, значение: тег с максимальной площадью
 
-    return frame, largest_tag
+    for tag in tags:
+        tag_id = tag.tag_id
+        if tag_id not in [1, 2, 3, 4]:
+            continue
+
+        area = calculate_tag_area(tag)
+
+        if tag_id not in largest_tags or area > calculate_tag_area(largest_tags[tag_id]):
+            largest_tags[tag_id] = tag
+
+    return frame, largest_tags
 
 def calculate_tag_area(tag):
     """Вычисляет площадь AprilTag на основании его углов."""
@@ -39,6 +45,10 @@ def calculate_tag_area(tag):
         (x[0] * y[1] + x[1] * y[2] + x[2] * y[3] + x[3] * y[0]) -
         (y[0] * x[1] + y[1] * x[2] + y[2] * x[3] + y[3] * x[0])
     )
+
+import time
+import cv2
+import numpy as np
 
 def camera_worker(camera_url, detector, frame_rate, output_queue, stop_event, cam_index):
     """Рабочий поток для захвата и обработки кадров с камеры."""
@@ -56,25 +66,35 @@ def camera_worker(camera_url, detector, frame_rate, output_queue, stop_event, ca
             time.sleep(delay)
             continue
 
-        processed_frame, largest_tag = process_frame(frame, detector)
+        processed_frame, largest_tags = process_frame(frame, detector)
 
-        if largest_tag is not None:
-            draw_tag(processed_frame, largest_tag)
-            corners = largest_tag.corners.astype(int)
-            area = cv2.contourArea(corners)
-            info_text = f"ID: {largest_tag.tag_id} Area: {int(area)} px Decision_margin: {largest_tag.decision_margin:.2f} Hamming: {largest_tag.hamming}"
+        if largest_tags:
+            text_lines = []
+            for tag_id, tag in largest_tags.items():
+                draw_tag(processed_frame, tag)
+                area = calculate_tag_area(tag)
+                info = f"ID: {tag_id} Area: {int(area)} px Margin: {tag.decision_margin:.2f} Hamming: {tag.hamming}"
+                text_lines.append(info)
 
-            text_height = 60
-            margin = 10
+            # Параметры текста
             font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 2
+            font_scale = 1.6  # увеличенный размер шрифта
             font_color = (255, 255, 255)
             line_type = 2
 
-            # Создаем новый кадр для отображения информации о теге
+            line_height = 50  # высота строки (пиксели)
+            margin = 10  # дополнительный отступ снизу
+            text_height = line_height * len(text_lines) + margin
+
+            # Создаем новый кадр с дополнительным местом для текста
             new_frame = np.zeros((frame.shape[0] + text_height, frame.shape[1], 3), dtype=np.uint8)
             new_frame[:frame.shape[0], :, :] = processed_frame
-            cv2.putText(new_frame, info_text, (10, frame.shape[0] + text_height - margin), font, font_scale, font_color, line_type)
+
+            # Рисуем текст
+            for i, line in enumerate(text_lines):
+                y = frame.shape[0] + (i + 1) * line_height - 10  # корректируем по базовой линии текста
+                cv2.putText(new_frame, line, (10, y), font, font_scale, font_color, line_type)
+
             output_queue.put((cam_index, new_frame))
         else:
             output_queue.put((cam_index, processed_frame))
