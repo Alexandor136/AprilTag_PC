@@ -4,6 +4,7 @@ import numpy as np
 import threading
 import queue
 import time
+import reboot_ethernet_interface
 
 def draw_tag(frame, tag):
     """Отображает AprilTag на кадре."""
@@ -46,10 +47,6 @@ def calculate_tag_area(tag):
         (y[0] * x[1] + y[1] * x[2] + y[2] * x[3] + y[3] * x[0])
     )
 
-import time
-import cv2
-import numpy as np
-
 def camera_worker(camera_url, detector, frame_rate, output_queue, stop_event, cam_index):
     """Рабочий поток для захвата и обработки кадров с камеры."""
     cap = cv2.VideoCapture(camera_url)
@@ -78,10 +75,10 @@ def camera_worker(camera_url, detector, frame_rate, output_queue, stop_event, ca
 
             # Параметры текста
             font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1.6  # увеличенный размер шрифта
+            font_scale = 1.6  
             font_color = (255, 255, 255)
             line_type = 2
-
+            
             line_height = 50  # высота строки (пиксели)
             margin = 10  # дополнительный отступ снизу
             text_height = line_height * len(text_lines) + margin
@@ -151,6 +148,9 @@ def main(camera_urls, frame_rate, display=True):
         cv2.destroyAllWindows()  # Закрываем все окна OpenCV
 
 if __name__ == "__main__":
+
+    reboot_ethernet_interface.reboot_interface('enp2s0')
+
     CAMERA_URLS = [
         "rtsp://admin:kZx_vN8!@172.16.9.52/stream1",
         "rtsp://admin:kZx_vN8!@172.16.9.53/stream1",
