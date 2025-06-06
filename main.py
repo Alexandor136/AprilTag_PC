@@ -159,3 +159,4 @@ if __name__ == "__main__":
 
     FRAME_RATE = 10  # Частота кадров
     main(CAMERA_URLS, FRAME_RATE)  # Запускаем основную функцию
+# 9.17

@@ -17,4 +17,4 @@ def reboot_interface(interface):
     except subprocess.CalledProcessError as e:
         logging.info(f'Ошибка при перезапуске интерфейса {interface}: {e}')
 
-#reboot_interface('enp2s0')
+reboot_interface('enp2s0')
