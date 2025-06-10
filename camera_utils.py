@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import time
+import log
 
 def draw_tag(frame, tag):
     """
@@ -76,7 +77,6 @@ def process_frame(frame, detector):
     return frame, largest_tags
 
 
-
 def open_camera(camera_url, cam_index):
     """
     Открывает видеопоток камеры.
@@ -139,9 +139,6 @@ def prepare_text_frame(frame, text_lines):
         cv2.putText(new_frame, line, (10, y), font, font_scale, font_color, line_type)
 
     return new_frame
-
-import cv2
-import time
 
 
 def camera_worker(camera_url, detector, frame_rate, output_queue,

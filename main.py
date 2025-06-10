@@ -2,10 +2,8 @@
 import cv2
 import os
 from pupil_apriltags import Detector
-import numpy as np
 import threading
 import queue
-import time
 import reboot_ethernet_interface
 from read_roi import load_roi_for_ip, extract_ip_from_url
 from camera_utils import camera_worker, display_frames
@@ -66,11 +64,11 @@ def main(camera_urls, frame_rate, display=True):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    reboot_ethernet_interface.reboot_interface('enp2s0')
+    #reboot_ethernet_interface.reboot_interface('enp2s0')
     CAMERA_URLS = [
-        "rtsp://admin:kZx_vN8!@172.16.9.52/stream1",
-        "rtsp://admin:kZx_vN8!@172.16.9.53/stream1",
-        "rtsp://admin:kZx_vN8!@172.16.9.54/stream1"
+        "rtsp://admin:kZx_vN8!@10.16.9.52/stream1",
+        "rtsp://admin:kZx_vN8!@10.16.9.53/stream1",
+        "rtsp://admin:kZx_vN8!@10.16.9.54/stream1"
     ]
     FRAME_RATE = 10
     main(CAMERA_URLS, FRAME_RATE)
