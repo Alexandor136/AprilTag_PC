@@ -1,4 +1,3 @@
-# roi_utils.py
 import os
 import cv2
 
@@ -30,3 +29,5 @@ def load_roi_for_ip(ip, filename):
 
 def extract_ip_from_url(url):
     return url.split("@")[-1].split("/")[0]
+
+#print(load_roi_for_ip('10.16.9.52', 'roi/roi.xml'))

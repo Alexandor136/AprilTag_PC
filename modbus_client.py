@@ -14,7 +14,7 @@ def check_response(response):
 async def write_modbus(
     value: int,
     address: int,
-    host: str = '172.16.9.17',
+    host: str,
     port: int = 502,
     slave_id: int = 1,
 ) -> None:
@@ -56,7 +56,7 @@ async def write_modbus(
 if __name__ == "__main__":
     # Пример записи значения 123 в регистр 9998
     asyncio.run(write_modbus(
-        value=88,
-        address=9998,
-        host="172.16.9.17",
+        value=50,
+        address=1000,
+        host="172.16.9.14",
     ))
