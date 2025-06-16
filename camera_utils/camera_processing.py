@@ -87,27 +87,6 @@ class CameraProcessor:
                 
             return display_frame
     
-    async def _send_to_modbus(self, tags, modbus_cfg):
-        """Асинхронная отправка данных в Modbus"""
-        try:
-            modbus_value = self._encode_tags(tags)
-            await write_modbus(
-                value=modbus_value,
-                address=modbus_cfg.register,
-                host=modbus_cfg.modbus_server_ip
-            )
-            print(f"Отправлено в Modbus (регистр {modbus_cfg.register}): {modbus_value}")
-        except Exception as e:
-            print(f"Ошибка Modbus: {str(e)}")
-    
-    def _encode_tags(self, tags):
-        """Кодирование тегов в битовую маску (4 бита)"""
-        value = 0
-        for tag in tags:
-            if 1 <= tag.tag_id <= 4:
-                value |= 1 << (tag.tag_id - 1)
-        return value
-    
     def stop_processing(self):
         """Корректная остановка всех потоков"""
         self.stop_event.set()
