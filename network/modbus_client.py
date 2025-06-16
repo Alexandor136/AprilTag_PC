@@ -54,7 +54,7 @@ async def write_modbus(
 
 
 if __name__ == "__main__":
-    # Пример записи значения 123 в регистр 9998
+    # Пример записи 
     asyncio.run(write_modbus(
         value=50,
         address=1000,
