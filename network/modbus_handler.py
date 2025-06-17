@@ -25,9 +25,12 @@ class ModbusHandler:
 
     def _encode_tags(self, tags: List) -> int:
         """Кодирование тегов в битовую маску"""
+        if not tags:  # Если список тегов пуст, возвращаем 0
+            return 0
+            
         value = 0
         for tag in tags:
-            if 1 <= tag.tag_id <= 4:
+            if 1 <= tag.tag_id <= 32:  # Поддерживаем до 32 бит
                 value |= 1 << (tag.tag_id - 1)
         return value
 
