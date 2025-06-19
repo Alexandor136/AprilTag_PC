@@ -61,15 +61,17 @@ class CameraProcessor:
             self.threads.append(thread)
     
     def _modbus_sender_worker(self):
+        """Поток для периодической отправки тегов в Modbus"""
         while not self.stop_event.is_set():
             try:
+                # Собираем все обнаруженные теги
                 all_tags = []
-                with threading.Lock():  # Блокируем доступ к last_sent_tags
-                    for config in self.camera_configs:
-                        if config.index in self.last_sent_tags:
-                            for tag_id in self.last_sent_tags[config.index]:
-                                all_tags.append(DetectedTag(tag_id=tag_id, camera_index=config.index))
+                for config in self.camera_configs:
+                    if config.index in self.last_sent_tags:
+                        for tag_id in self.last_sent_tags[config.index]:
+                            all_tags.append(DetectedTag(tag_id=tag_id, camera_index=config.index))
                 
+                # Группируем теги по камерам и отправляем
                 for config in self.camera_configs:
                     if config.modbus:
                         tags_for_camera = [
@@ -77,11 +79,10 @@ class CameraProcessor:
                             if tag.camera_index == config.index
                         ]
                         
-                        asyncio.run(
-                            self.modbus_handler.send_tags(
-                                tags_for_camera if tags_for_camera else [],
-                                config.modbus
-                            )
+                        # Используем синхронную обертку
+                        self.modbus_handler.send_tags(
+                            tags_for_camera if tags_for_camera else [],
+                            config.modbus
                         )
 
                 time.sleep(1)

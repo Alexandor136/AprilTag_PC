@@ -51,12 +51,3 @@ async def write_modbus(
         print(f"Ошибка Modbus: {e}")
     except Exception as e:
         print(f"Критическая ошибка: {e}")
-
-
-if __name__ == "__main__":
-    # Пример записи 
-    asyncio.run(write_modbus(
-        value=50,
-        address=1000,
-        host="172.16.9.14",
-    ))

@@ -1,8 +1,11 @@
+modbus_status:
+  register: 1000
+  modbus_server_ip: "172.16.9.14"
+
 cameras:
   - name: "Камера 1"
     camera_ip: "10.16.9.52"  # IP камеры
     rtsp: "rtsp://admin:kZx_vN8!@10.16.9.52/stream1"
-
     index: 1                   # Уникальный индекс (1-3)
     modbus:
       register: 1001           # Регистр Modbus для этой камеры

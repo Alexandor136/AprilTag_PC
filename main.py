@@ -10,10 +10,14 @@ def main():
     try:
         # Загрузка конфигурации
         config_loader = ConfigLoader("config.yaml")
-        camera_configs = config_loader.load()
+        status_config, camera_configs = config_loader.load()
         
         # Инициализация процессора
-        processor = CameraProcessor(camera_configs, roi_file='roi/roi.xml')  # Указываем путь к ROI
+        processor = CameraProcessor(camera_configs, roi_file='roi/roi.xml')
+        
+        # Запуск heartbeat
+        processor.modbus_handler.start_heartbeat(status_config)
+        
         display = DisplayManager(len(camera_configs))
         
         # Запуск обработки
@@ -32,7 +36,9 @@ def main():
             display.stop_display()
             
     except Exception as e:
-        print(f"Фатальная ошибка: {str(e)}")
+        print(f"Фатальная ошибка: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
