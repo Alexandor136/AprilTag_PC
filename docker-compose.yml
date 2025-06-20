@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  apriltag-detector:
+    build: .
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./roi:/app/roi
+    environment:
+      - QT_QPA_PLATFORM=offscreen
+    restart: unless-stopped

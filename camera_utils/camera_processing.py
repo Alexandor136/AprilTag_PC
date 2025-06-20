@@ -3,7 +3,6 @@ import time
 import queue
 import threading
 import cv2
-import asyncio
 from pupil_apriltags import Detector
 from dataclasses import dataclass
 from .tag_processing import process_frame

@@ -1,7 +1,6 @@
 # display_manager.py (исправленная версия)
 import cv2
 import threading
-import time
 import queue
 
 class DisplayManager:

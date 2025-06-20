@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Optional
+from typing import List
 import threading
 from config_loader import ModbusStatusConfig, ModbusConfig
 from network.modbus_client import write_modbus
