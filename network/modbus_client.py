@@ -1,4 +1,3 @@
-import asyncio
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException, ModbusIOException
 
