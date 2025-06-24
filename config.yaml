@@ -11,18 +11,18 @@ cameras:
       register: 1001           # Регистр Modbus для этой камеры
       modbus_server_ip: "172.16.9.14" 
 
-  - name: "Камера 2"
-    camera_ip: "10.16.9.53"
-    rtsp: "rtsp://admin:kZx_vN8!@10.16.9.53/stream1"
-    index: 2
-    modbus:
-      register: 1002
-      modbus_server_ip: "172.16.9.14" 
+ # - name: "Камера 2"
+ #   camera_ip: "10.16.9.53"
+ #   rtsp: "rtsp://admin:kZx_vN8!@10.16.9.53/stream1"
+ #   index: 2
+ #   modbus:
+ #     register: 1002
+ #     modbus_server_ip: "172.16.9.14" 
 
-  - name: "Камера 3"
-    camera_ip: "10.16.9.54"
-    rtsp: "rtsp://admin:kZx_vN8!@10.16.9.54/stream1"
-    index: 3
-    modbus:
-      register: 1003
-      modbus_server_ip: "172.16.9.14" 
+#  - name: "Камера 3"
+#    camera_ip: "10.16.9.54"
+#    rtsp: "rtsp://admin:kZx_vN8!@10.16.9.54/stream1"
+#    index: 3
+#    modbus:
+#      register: 1003
+#      modbus_server_ip: "172.16.9.14" 
