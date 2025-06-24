@@ -57,8 +57,8 @@ class ConfigLoader:
         if not isinstance(config['modbus_status']['register'], int):
             raise ValueError("modbus_status.register должен быть целым числом")
             
-        if len(config['cameras']) != 3:
-            raise ValueError("Конфиг должен содержать ровно 3 камеры")
+        #if len(config['cameras']) != 3:
+            #raise ValueError("Конфиг должен содержать ровно 3 камеры")
         
         indices = set()
         for cam in config['cameras']:
