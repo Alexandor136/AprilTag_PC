@@ -1,16 +1,17 @@
-from dataclasses import dataclass
-from typing import List, Tuple
 import yaml
+from dataclasses import dataclass
+from typing import List, Dict, Any
 
 @dataclass
-class ModbusStatusConfig:
-    register: int
+class HeartbeatConfig:
     modbus_server_ip: str
+    register: int
+    interval: float = 1.0
 
 @dataclass
 class ModbusConfig:
-    register: int
     modbus_server_ip: str
+    register: int
 
 @dataclass
 class CameraConfig:
@@ -18,52 +19,58 @@ class CameraConfig:
     camera_ip: str
     rtsp: str
     index: int
-    modbus: ModbusConfig
+    modbus: ModbusConfig  # Используем ModbusConfig вместо CameraModbusConfig
 
 class ConfigLoader:
     def __init__(self, config_path: str):
         self.config_path = config_path
 
-    def load(self) -> Tuple[ModbusStatusConfig, List[CameraConfig]]:
-        with open(self.config_path) as f:
-            config = yaml.safe_load(f)
+    def load(self) -> tuple[List[HeartbeatConfig], List[CameraConfig]]:
+        with open(self.config_path, 'r') as f:
+            config = yaml.safe_load(f) or {}
         
-        self._validate(config)
+        heartbeat_configs = self._load_heartbeat_configs(config)
+        camera_configs = self._load_camera_configs(config)
         
-        status_config = ModbusStatusConfig(
-            register=config['modbus_status']['register'],
-            modbus_server_ip=config['modbus_status']['modbus_server_ip']
-        )
-        
-        cameras = []
-        for cam in config['cameras']:
-            cameras.append(CameraConfig(
-                name=cam['name'],
-                camera_ip=cam['camera_ip'],
-                rtsp=cam['rtsp'],
-                index=cam['index'] - 1,
-                modbus=ModbusConfig(
-                    register=cam['modbus']['register'],
-                    modbus_server_ip=cam['modbus']['modbus_server_ip']
-                )
-            ))
-            
-        return status_config, cameras
+        return heartbeat_configs, camera_configs
 
-    def _validate(self, config: dict):
+    def _load_heartbeat_configs(self, config: Dict[str, Any]) -> List[HeartbeatConfig]:
         if 'modbus_status' not in config:
-            raise ValueError("Отсутствует секция modbus_status в конфиге")
-            
-        if not isinstance(config['modbus_status']['register'], int):
-            raise ValueError("modbus_status.register должен быть целым числом")
-            
-        #if len(config['cameras']) != 3:
-            #raise ValueError("Конфиг должен содержать ровно 3 камеры")
+            raise ValueError("Отсутствует секция 'modbus_status' в конфигурации")
         
-        indices = set()
+        return [
+            HeartbeatConfig(
+                modbus_server_ip=str(cfg['modbus_server_ip']),
+                register=int(cfg['register']),
+                interval=float(cfg.get('interval', 1.0))
+            )
+            for cfg in config['modbus_status']
+        ]
+
+    def _load_camera_configs(self, config: Dict[str, Any]) -> List[CameraConfig]:
+        if 'cameras' not in config:
+            raise ValueError("Отсутствует секция 'cameras' в конфигурации")
+        
+        camera_configs = []
         for cam in config['cameras']:
-            if not 1 <= cam['index'] <= 3:
-                raise ValueError("Индексы камер должны быть от 1 до 3")
-            if cam['index'] in indices:
-                raise ValueError(f"Дублируется индекс камеры: {cam['index']}")
-            indices.add(cam['index'])
+            try:
+                camera_configs.append(
+                    CameraConfig(
+                        name=str(cam['name']),
+                        camera_ip=str(cam['camera_ip']),
+                        rtsp=str(cam['rtsp']),
+                        index=int(cam['index']),
+                        modbus=ModbusConfig(
+                            modbus_server_ip=str(cam['modbus']['modbus_server_ip']),
+                            register=int(cam['modbus']['register'])
+                        )
+                    )
+                )
+            except (KeyError, TypeError) as e:
+                print(f"Ошибка загрузки конфигурации камеры: {e}")
+                continue
+                
+        if not camera_configs:
+            raise ValueError("Не найдено валидных конфигураций камер")
+            
+        return camera_configs

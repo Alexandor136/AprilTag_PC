@@ -1,14 +1,21 @@
 import asyncio
-from typing import List
 import threading
-from config_loader import ModbusStatusConfig, ModbusConfig
+import time
+from typing import List, Dict
+from dataclasses import dataclass
+from config_loader import HeartbeatConfig, ModbusConfig
 from network.modbus_client import write_modbus
+
+@dataclass
+class HeartbeatTask:
+    status: int = 0
+    interval: float = 1.0
+    last_sent: float = 0.0
 
 class ModbusHandler:
     def __init__(self):
         self.active = True
-        self.heartbeat_task = None
-        self.current_status = 0
+        self.heartbeat_tasks: Dict[str, HeartbeatTask] = {}
         self.loop = asyncio.new_event_loop()
         self.lock = threading.Lock()
         self.last_sent_tags = {}
@@ -33,17 +40,34 @@ class ModbusHandler:
             self.loop
         )
 
-    async def _send_heartbeat(self, status_config: ModbusStatusConfig):
-        """Циклическая отправка статуса 0/1"""
+    async def _send_heartbeats(self, status_configs: List[HeartbeatConfig]):
+        """Циклическая отправка статуса 0/1 для всех конфигураций"""
         while self.active:
             try:
-                self.current_status = 1 - self.current_status
-                await write_modbus(
-                    value=self.current_status,
-                    address=status_config.register,
-                    host=status_config.modbus_server_ip
-                )
-                await asyncio.sleep(1)
+                current_time = time.time()
+                
+                for cfg in status_configs:
+                    key = f"{cfg.modbus_server_ip}:{cfg.register}"
+                    
+                    if key not in self.heartbeat_tasks:
+                        self.heartbeat_tasks[key] = HeartbeatTask(
+                            interval=getattr(cfg, 'interval', 1.0)
+                        )
+                    
+                    task = self.heartbeat_tasks[key]
+                    
+                    if current_time - task.last_sent >= task.interval:
+                        task.status = 1 - task.status
+                        await write_modbus(
+                            value=task.status,
+                            address=cfg.register,
+                            host=cfg.modbus_server_ip
+                        )
+                        task.last_sent = current_time
+                        print(f"Heartbeat sent to {cfg.modbus_server_ip}:{cfg.register} = {task.status}")
+                
+                await asyncio.sleep(0.1)  # короткий sleep для частой проверки
+                
             except Exception as e:
                 print(f"Ошибка heartbeat: {str(e)}")
                 await asyncio.sleep(5)
@@ -53,7 +77,7 @@ class ModbusHandler:
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
 
-    def start_heartbeat(self, status_config: ModbusStatusConfig):
+    def start_heartbeat(self, status_configs: List[HeartbeatConfig]):
         """Запуск всех асинхронных задач"""
         if not hasattr(self, '_thread') or not self._thread.is_alive():
             self._thread = threading.Thread(
@@ -62,9 +86,9 @@ class ModbusHandler:
             )
             self._thread.start()
             
-            # Запускаем heartbeat
+            # Запускаем heartbeat для всех конфигураций
             asyncio.run_coroutine_threadsafe(
-                self._send_heartbeat(status_config),
+                self._send_heartbeats(status_configs),
                 self.loop
             )
 

@@ -19,13 +19,13 @@ def gui_main(config_path):
     try:
         # Загрузка конфигурации
         config_loader = ConfigLoader(config_path)
-        status_config, camera_configs = config_loader.load()
+        status_configs, camera_configs = config_loader.load()  
         
         # Инициализация процессора
         processor = CameraProcessor(camera_configs, roi_file='roi/roi.xml')
         
-        # Запуск heartbeat
-        processor.modbus_handler.start_heartbeat(status_config)
+        # Запуск heartbeat для всех конфигураций
+        processor.modbus_handler.start_heartbeat(status_configs)
         
         display = DisplayManager(len(camera_configs))
         
