@@ -1,8 +1,8 @@
 modbus_status:
-  - ip: "192.168.17.23"
+  - modbus_server_ip: "192.168.17.23"
     register: 1000
     interval: 1
-  - ip: "192.168.17.40"
+  - modbus_server_ip: "192.168.17.40"
     register: 1000
     interval: 1
 
