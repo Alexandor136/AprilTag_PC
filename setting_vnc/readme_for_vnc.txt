@@ -7,8 +7,11 @@
 ## Как использовать
 1. Дайте права на выполнение:
    ```bash
-   chmod +x setup_vnc.sh
-   ./setup_vnc.sh
+   chmod +x vnc.sh
+   ./vnc.sh
+
+ответы  111111 n 111111 y
+
 
 Команда	Описание
 sudo apt install tigervnc-standalone-server	Установка TigerVNC

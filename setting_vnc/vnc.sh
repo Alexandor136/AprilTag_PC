@@ -17,7 +17,7 @@ After=network.target
 [Service]
 User=$USER
 WorkingDirectory=/home/$USER
-ExecStart=/usr/bin/vncserver -geometry 1920x1080 -depth 24 -localhost no :%i
+ExecStart=/usr/bin/vncserver -geometry 1920x1080 -depth 24 -localhost no -alwaysshared :%i
 ExecStop=/usr/bin/vncserver -kill :%i
 Restart=on-failure
 
@@ -37,16 +37,24 @@ sudo apt install -y x11vnc
 echo "Задайте пароль для x11vnc:"
 x11vnc -storepasswd
 
+# Настройка прав на файл пароля
+sudo chown $USER:$USER /home/$USER/.vnc/passwd
+chmod 600 /home/$USER/.vnc/passwd
+
 # Создание systemd-сервиса для x11vnc
 sudo tee /etc/systemd/system/x11vnc.service > /dev/null <<EOF
 [Unit]
 Description=x11vnc remote desktop server
 After=display-manager.service
+Requires=display-manager.service
 
 [Service]
-ExecStart=/usr/bin/x11vnc -display :0 -auth guess -forever -shared -rfbauth /home/$USER/.vnc/passwd
+ExecStart=/usr/bin/x11vnc -display :0 -auth /run/user/$(id -u $USER)/gdm/Xauthority -forever -shared -rfbauth /home/$USER/.vnc/passwd
 User=$USER
 Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/run/user/$(id -u $USER)/gdm/Xauthority
 
 [Install]
 WantedBy=multi-user.target
