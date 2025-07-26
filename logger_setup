@@ -1,0 +1,31 @@
+# logger_setup.py
+import sys
+import logging
+from logging import StreamHandler, Formatter
+
+def setup_logger():
+    """Настройка и возврат логгера"""
+    logger = logging.getLogger('my_app_logger')
+    if logger.handlers:  # Проверяем, не был ли логгер уже настроен
+        return logger
+    
+    logger.setLevel(logging.DEBUG)
+
+    # Обработчик для вывода логов уровня INFO в stdout
+    info_handler = StreamHandler(stream=sys.stdout)
+    info_handler.setLevel(logging.INFO)
+    info_handler.addFilter(lambda record: record.levelno <= logging.INFO)
+    info_handler.setFormatter(Formatter(fmt='[%(asctime)s: %(levelname)s] %(message)s'))
+
+    # Обработчик для вывода логов уровня DEBUG и выше в stderr
+    error_handler = StreamHandler(stream=sys.stderr)
+    error_handler.setLevel(logging.DEBUG)
+    error_handler.setFormatter(Formatter(fmt='[%(asctime)s: %(levelname)s] %(message)s'))
+
+    logger.addHandler(info_handler)
+    logger.addHandler(error_handler)
+    
+    return logger
+
+# Создаем глобальный логгер
+logger = setup_logger()

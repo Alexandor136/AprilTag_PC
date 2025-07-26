@@ -1,5 +1,6 @@
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException, ModbusIOException
+from ..logger_setup import logger
 
 
 def check_response(response):
@@ -27,7 +28,9 @@ async def write_modbus(
         port: порт Modbus-TCP (по умолчанию 502)
         slave_id: ID устройства Modbus (по умолчанию 1)
     """
-    print(f"Подключение к {host}:{port}...")
+    #print(f"Подключение к {host}:{port}...")
+    logger.info(f"Подключение к {host}:{port}...")
+
     try:
         async with AsyncModbusTcpClient(
             host=host,
@@ -36,8 +39,11 @@ async def write_modbus(
         ) as client:
             if not client.connected:
                 raise ConnectionError("Не удалось подключиться к устройству")
+                logger.info
 
-            print(f"Запись {value} в регистр {address} (slave={slave_id})...")
+            #print(f"Запись {value} в регистр {address} (slave={slave_id})...")
+            logger.info(f"Запись {value} в регистр {address} (slave={slave_id})...")
+
             response = await client.write_register(
                 address=address,
                 value=value,
@@ -45,8 +51,13 @@ async def write_modbus(
             )
             check_response(response)
             print("Успешно!")
+            logger.info("Успешно!")
+
 
     except ModbusException as e:
-        print(f"Ошибка Modbus: {e}")
+        #print(f"Ошибка Modbus: {e}")
+        logger.info(f"Ошибка Modbus: {e}")
     except Exception as e:
-        print(f"Критическая ошибка: {e}")
+        #print(f"Критическая ошибка: {e}")
+        logger.info(f"Критическая ошибка: {e}")
+
