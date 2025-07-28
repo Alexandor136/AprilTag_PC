@@ -15,21 +15,43 @@
 ## Структура проекта
 
 april_tag/
-├── camera_utils/          # Модули обработки видео
-│   ├── camera_operations.py
-│   ├── camera_processing.py
-│   └── display_manager.py
-├── network/               # Сетевые функции
-│   ├── modbus_client.py
-│   └── modbus_handler.py
-├── roi/                   # Настройка ROI
-│   ├── read_roi.py
-│   ├── setting_roi.py
-│   └── roi.xml
-├── config.yaml            # Основные настройки
-├── docker-compose.yml     # Docker конфигурация
-├── main.py                # GUI приложение
-└── cli.py                 # Консольная версия
+├── camera_utils/ # Модули обработки видео
+│ ├── camera_operations.py
+│ ├── camera_processing.py
+│ └── display_manager.py
+├── network/ # Сетевые функции
+│ ├── modbus_client.py
+│ └── modbus_handler.py
+├── roi/ # Настройка ROI (Region of Interest)
+│ ├── read_roi.py
+│ ├── setting_roi.py
+│ └── roi.xml
+├── config.yaml # Основные настройки проекта
+├── docker-compose.yml # Конфигурация Docker
+├── main.py # GUI-приложение
+└── cli.py # Консольная версия
+
+1. **`camera_utils/`**  
+   - Работа с видеопотоком (захват, обработка кадров, отображение).  
+   - Пример использования: детекция AprilTag в реальном времени.  
+
+2. **`network/`**  
+   - Взаимодействие по протоколу Modbus (опрос устройств, передача данных).  
+
+3. **`roi/`**  
+   - Настройка области интереса (ROI) для обработки только части изображения.  
+   - Конфигурация хранится в `roi.xml`.  
+
+4. **`config.yaml`**  
+   - Параметры камеры, сети, пути к файлам.  
+
+5. **`docker-compose.yml`**  
+   - Готовые сервисы для запуска через Docker (например, веб-интерфейс + обработчик).  
+
+6. **Запуск:**  
+   - GUI: `python3 main.py`  
+   - CLI: `python3 cli.py`  
+   - Docker: `docker-compose up` 
 
 ## Использование
 
