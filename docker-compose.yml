@@ -9,9 +9,12 @@ services:
       - ./config.yaml:/app/config.yaml
       - ./roi:/app/roi
       - ./logs:/app/logs
+      #- /etc/localtime:/etc/localtime:ro для линукса
+
     environment:
       - QT_QPA_PLATFORM=offscreen
       - LOG_LEVEL_CONSOLE=DEBUG  # Уровень для консоли
       - LOG_LEVEL_FILE=INFO      # Уровень для файла
+      - TZ=Asia/Krasnoyarsk  # Указываем явно временную зону
     restart: unless-stopped
 
