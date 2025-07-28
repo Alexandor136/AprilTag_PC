@@ -1,15 +1,14 @@
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException, ModbusIOException
-from ..logger_setup import logger
+from logger_setup import logger
 
 
 def check_response(response):
-    """Проверяем ответ от устройства."""
+    """Только проверка без логирования"""
     if isinstance(response, ModbusIOException):
-        raise ModbusException(f"Ошибка ввода-вывода: {response}")
+        raise ModbusException(f"Ошибка ввода-вывода: {response}")  # Без logger.warning
     if hasattr(response, 'isError') and response.isError():
-        raise ModbusException(f"Устройство вернуло ошибку: {response}")
-
+        raise ModbusException(f"Устройство вернуло ошибку: {response}")  # Без logger.warning
 
 async def write_modbus(
     value: int,
@@ -29,7 +28,7 @@ async def write_modbus(
         slave_id: ID устройства Modbus (по умолчанию 1)
     """
     #print(f"Подключение к {host}:{port}...")
-    logger.info(f"Подключение к {host}:{port}...")
+    logger.debug(f"Подключение к {host}:{port}...")
 
     try:
         async with AsyncModbusTcpClient(
@@ -38,11 +37,10 @@ async def write_modbus(
             framer="socket",  # протокол Modbus-TCP
         ) as client:
             if not client.connected:
-                raise ConnectionError("Не удалось подключиться к устройству")
-                logger.info
-
+                raise ConnectionError(logger.warning("Не удалось подключиться к устройству"))
+                
             #print(f"Запись {value} в регистр {address} (slave={slave_id})...")
-            logger.info(f"Запись {value} в регистр {address} (slave={slave_id})...")
+            logger.debug(f"Запись {value} в регистр {address} (slave={slave_id})...")
 
             response = await client.write_register(
                 address=address,
@@ -50,14 +48,14 @@ async def write_modbus(
                 slave=slave_id,
             )
             check_response(response)
-            print("Успешно!")
-            logger.info("Успешно!")
+            #print("Успешно!")
+            logger.info(f"Выполнена запись значения: {value} в регистр {address} (slave={slave_id})")
 
 
     except ModbusException as e:
-        #print(f"Ошибка Modbus: {e}")
-        logger.info(f"Ошибка Modbus: {e}")
+        # Исключение будет перехвачено выше с автоматическим логированием
+        raise
     except Exception as e:
         #print(f"Критическая ошибка: {e}")
-        logger.info(f"Критическая ошибка: {e}")
+        logger.warning(f"Критическая ошибка: {e}")
 
