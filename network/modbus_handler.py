@@ -5,6 +5,7 @@ from typing import List, Dict
 from dataclasses import dataclass
 from config_loader import ModbusStatusConfig, ModbusConfig
 from network.modbus_client import write_modbus
+from logger_setup import logger
 
 @dataclass
 class HeartbeatTask:
@@ -35,7 +36,7 @@ class ModbusHandler:
         """
         try:
             modbus_value = self._encode_tags(tags)
-            print(f"Отправка тегов на {modbus_cfg.modbus_server_ip}:{modbus_cfg.register}")
+            logger.info(f"Отправка тегов на {modbus_cfg.modbus_server_ip}:{modbus_cfg.register}")
             await write_modbus(
                 value=modbus_value,
                 address=modbus_cfg.register,
@@ -82,7 +83,7 @@ class ModbusHandler:
                 await asyncio.sleep(0.1)
                 
             except Exception as e:
-                print(f"Ошибка heartbeat: {str(e)}")
+                logger.warning(f"Ошибка heartbeat: {str(e)}")
                 await asyncio.sleep(5)
 
     def _run_event_loop(self):

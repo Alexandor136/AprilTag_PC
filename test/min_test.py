@@ -93,7 +93,7 @@ def process_stream(rtsp_url):
 
 def main():
     rtsp_urls = [
-        "rtsp://admin:kZx_vN8!@172.16.9.52/stream1"
+        "rtsp://admin:kZx_vN8!@192.168.17.86/stream1"
     ]
 
     with ThreadPoolExecutor(max_workers=len(rtsp_urls)) as executor:

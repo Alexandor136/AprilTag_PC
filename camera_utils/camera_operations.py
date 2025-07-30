@@ -5,7 +5,7 @@ from camera_utils import tag_processing, frame_utils
 
 def open_camera(camera_url, cam_index):
     """
-    Открывает видеопоток камеры.
+    Открывает видеопоток камеры с оптимизацией параметров.
 
     Args:
         camera_url (str): URL камеры.
@@ -14,11 +14,19 @@ def open_camera(camera_url, cam_index):
     Returns:
         cv2.VideoCapture or None: Объект захвата или None при ошибке.
     """
-    cap = cv2.VideoCapture(camera_url)
+    cap = cv2.VideoCapture(camera_url, cv2.CAP_FFMPEG)
     if not cap.isOpened():
         print(f"Камера {cam_index + 1} недоступна")
         return None
+
+    # Оптимизация параметров VideoCapture
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Минимальный буфер кадров
+    cap.set(cv2.CAP_PROP_FPS, 15)        # Ограничение FPS, если возможно
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
     return cap
+
 
 def camera_worker(camera_url, detector, frame_rate, output_queue,
                   stop_event, cam_index, roi):
@@ -51,31 +59,29 @@ def camera_worker(camera_url, detector, frame_rate, output_queue,
             time.sleep(delay)
             continue
 
-        # Копируем полный кадр для отображения
         display_frame = frame.copy()
-    
+
         x = int(roi["x"])
         y = int(roi["y"])
         w = int(roi["w"])
         h = int(roi["h"])
         roi_frame = frame[y:y + h, x:x + w]
 
-        # Обработка ROI
         processed_roi, largest_tags = tag_processing.process_frame(roi_frame, detector)
 
-        # Вставляем обработанный ROI обратно в копию полного кадра
         display_frame[y:y + h, x:x + w] = processed_roi
 
-        # Рисуем красную рамку вокруг ROI
-        cv2.rectangle(display_frame, (x, y), (x + w, y + h),
-                      color=(0, 0, 255), thickness=2)
+        cv2.rectangle(display_frame, (x, y), (x + w, y + h), color=(0, 0, 255), thickness=2)
 
-        # Добавляем текст с ID тегов, если есть
         if largest_tags:
             text_lines = [f"ID: {tag_id}" for tag_id in largest_tags.keys()]
             display_frame = frame_utils.prepare_text_frame(display_frame, text_lines)
 
-        output_queue.put((cam_index, display_frame))
+        try:
+            output_queue.put_nowait((cam_index, display_frame))
+        except queue.Full:
+            # Пропускаем кадр, если очередь заполнена
+            pass
 
         elapsed = time.time() - start_time
         time_to_wait = delay - elapsed
