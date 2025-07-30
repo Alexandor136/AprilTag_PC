@@ -9,6 +9,7 @@ from .tag_processing import process_frame
 from .frame_utils import prepare_text_frame
 from network.modbus_handler import ModbusHandler
 from roi.read_roi import load_roi_for_ip
+from logger_setup import logger
 
 
 @dataclass
@@ -95,7 +96,7 @@ class CameraProcessor:
 
                 time.sleep(1)
             except Exception as e:
-                print(f"Ошибка в потоке отправки Modbus: {e}")
+                logger.warning(f"Ошибка в потоке отправки Modbus: {e}")
 
     def _camera_worker(self, config):
         """
@@ -125,11 +126,11 @@ class CameraProcessor:
             if cap is None:
                 cap = open_capture()
                 if cap is None:
-                    print(f"Не удалось подключиться к {config.name} ({config.camera_ip}), повтор через 5 сек...")
+                    logger.warning(f"Не удалось подключиться к {config.name} ({config.camera_ip}), повтор через 5 сек...")
                     time.sleep(5)
                     continue
                 else:
-                    print(f"Подключение к {config.name} ({config.camera_ip}) успешно")
+                    logger.info(f"Подключение к {config.name} ({config.camera_ip}) успешно")
 
             roi = load_roi_for_ip(config.camera_ip, self.roi_file) or {
                 'x': 0, 'y': 0,
@@ -139,7 +140,7 @@ class CameraProcessor:
 
             ret, frame = cap.read()
             if not ret or frame is None:
-                print(f"Потеря кадра с {config.name} ({config.camera_ip}), переподключение...")
+                logger.warning(f"Потеря кадра с {config.name} ({config.camera_ip}), переподключение...")
                 cap.release()
                 cap = None
                 time.sleep(2)
@@ -164,7 +165,7 @@ class CameraProcessor:
                         self.last_sent_tags[config.index] = []
 
             except Exception as e:
-                print(f"Ошибка обработки кадра камеры {config.name}: {e}")
+                logger.warning(f"Ошибка обработки кадра камеры {config.name}: {e}")
 
         if cap:
             cap.release()
