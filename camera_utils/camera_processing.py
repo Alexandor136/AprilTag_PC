@@ -147,8 +147,10 @@ class CameraProcessor:
                 continue
 
             try:
-                # Обработка кадра
-                processed_frame, detected_tags = self._process_frame(frame, roi, config)
+                # Обработка кадра с параметрами площади тега
+                processed_frame, detected_tags = self._process_frame(
+                    frame, roi, config.min_tag_area, config.max_tag_area, config.name
+                )
 
                 # Пробуем положить в очередь без блокировки, пропуская кадры при переполнении
                 try:
@@ -170,14 +172,16 @@ class CameraProcessor:
         if cap:
             cap.release()
 
-    def _process_frame(self, frame, roi, config=None):
+    def _process_frame(self, frame, roi, min_tag_area=100.0, max_tag_area=10000.0, camera_name="Unknown"):
         """
         Обработка кадра: выделение ROI, детекция AprilTag и отрисовка.
 
         Args:
             frame (np.ndarray): Исходный кадр.
             roi (dict): Область интереса.
-            config: Конфигурация камеры (необязательно).
+            min_tag_area (float): Минимальная площадь тега.
+            max_tag_area (float): Максимальная площадь тега.
+            camera_name (str): Название камеры для логирования.
 
         Returns:
             tuple: (обработанный кадр, словарь обнаруженных тегов)
@@ -192,7 +196,9 @@ class CameraProcessor:
         roi_frame = frame[y:y + h, x:x + w]
 
         with self.detector_lock:
-            processed_roi, tags = process_frame(roi_frame, self.detector)
+            processed_roi, tags = process_frame(
+                roi_frame, self.detector, min_tag_area, max_tag_area, camera_name
+            )
 
         display_frame[y:y + h, x:x + w] = processed_roi
         cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)

@@ -2,6 +2,10 @@ import cv2
 import os
 import yaml
 from pathlib import Path
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+import matplotlib
 
 def load_config(config_path="config.yaml"):
     """Загружаем конфигурацию из YAML файла"""
@@ -89,8 +93,39 @@ def save_roi_for_ip(ip, roi, filename):
     finally:
         fs_write.release()
 
+def load_existing_roi(ip, filename="roi/roi.xml"):
+    """Загружаем существующий ROI из XML файла"""
+    if not os.path.exists(filename):
+        return None
+    
+    try:
+        fs = cv2.FileStorage(filename, cv2.FILE_STORAGE_READ)
+        if not fs.isOpened():
+            return None
+            
+        key = ip_to_key(ip)
+        node = fs.getNode(key)
+        if node.empty() or not node.isMap():
+            return None
+            
+        x = node.getNode('x').real() if not node.getNode('x').empty() else 0
+        y = node.getNode('y').real() if not node.getNode('y').empty() else 0
+        w = node.getNode('w').real() if not node.getNode('w').empty() else 0
+        h = node.getNode('h').real() if not node.getNode('h').empty() else 0
+        
+        fs.release()
+        
+        if w > 0 and h > 0:
+            return {'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)}
+        else:
+            return None
+            
+    except Exception as e:
+        print(f"Ошибка загрузки существующего ROI: {e}")
+        return None
+
 def select_roi_from_rtsp(camera_config):
-    """Выбираем ROI из RTSP потока с масштабированием"""
+    """Выбираем ROI из RTSP потока используя matplotlib"""
     if not camera_config or 'rtsp' not in camera_config:
         print("Неверная конфигурация камеры")
         return None
@@ -102,105 +137,111 @@ def select_roi_from_rtsp(camera_config):
         print(f"Ошибка подключения к RTSP потоку: {rtsp_url}")
         return None
 
-    # Получаем разрешение кадра
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
-    # Рассчитываем коэффициент масштабирования (макс 90% экрана)
-    screen_width = 1920  # Можно заменить на автоматическое определение
-    screen_height = 1080
-    scale = min(screen_width / width, screen_height / height) * 0.9
-
-    roi = {'x': 0, 'y': 0, 'w': 0, 'h': 0}
-    drawing = False
-    ix, iy = -1, -1
-    rect_frame = None
-    original_frame = None
-
-    def draw_rectangle(event, x, y, flags, param):
-        nonlocal drawing, ix, iy, roi, rect_frame, original_frame
-        orig_x = int(x / scale)
-        orig_y = int(y / scale)
-        
-        if event == cv2.EVENT_LBUTTONDOWN:
-            drawing = True
-            ix, iy = orig_x, orig_y
-        elif event == cv2.EVENT_MOUSEMOVE and drawing:
-            if original_frame is not None:
-                rect_frame = original_frame.copy()
-                cv2.rectangle(rect_frame, (ix, iy), (orig_x, orig_y), (0, 255, 0), 2)
-        elif event == cv2.EVENT_LBUTTONUP:
-            drawing = False
-            x0, y0 = min(ix, orig_x), min(iy, orig_y)
-            x1, y1 = max(ix, orig_x), max(iy, orig_y)
-            roi.update({'x': x0, 'y': y0, 'w': x1-x0, 'h': y1-y0})
-            if original_frame is not None:
-                rect_frame = original_frame.copy()
-                cv2.rectangle(rect_frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
-            print(f"Выбран ROI: {roi}")
-
-    window_name = f'RTSP Stream - {camera_config["name"]} ({camera_config["camera_ip"]})'
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(window_name, draw_rectangle)
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Не удалось получить кадр")
-            continue
-
-        original_frame = frame.copy()
-        display_frame = cv2.resize(frame, None, fx=scale, fy=scale)
-        
-        if rect_frame is not None:
-            display = cv2.resize(rect_frame, None, fx=scale, fy=scale)
-        else:
-            display = display_frame
-        
-        cv2.imshow(window_name, display)
-        
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:  # ESC - выход
-            roi = None
-            break
-        elif key == ord('s'):  # S - сохранить
-            if roi['w'] > 0 and roi['h'] > 0:
-                break
-            print("Выберите область перед сохранением!")
-        elif key == ord('q'):  # Q - отмена
-            roi = None
-            break
-
+    # Получаем кадр
+    ret, frame = cap.read()
     cap.release()
-    cv2.destroyAllWindows()
-    return roi
+    
+    if not ret:
+        print("Не удалось получить кадр из потока")
+        return None
 
+    # Загружаем существующий ROI
+    existing_roi = load_existing_roi(camera_config['camera_ip'])
+    
+    # Конвертируем BGR в RGB для matplotlib
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    
+    # Создаем график
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.imshow(frame_rgb)
+    ax.set_title(f'Выберите ROI для {camera_config["name"]}\n'
+                f'Кликните и протяните для выбора области\n'
+                f'Закройте окно для сохранения')
+    
+    # Рисуем существующий ROI красным
+    if existing_roi:
+        rect = Rectangle((existing_roi['x'], existing_roi['y']), 
+                        existing_roi['w'], existing_roi['h'],
+                        linewidth=2, edgecolor='red', facecolor='none',
+                        label='Existing ROI')
+        ax.add_patch(rect)
+        ax.legend()
+    
+    # Включаем интерактивный режим
+    plt.ion()
+    plt.show()
+    
+    # Используем встроенный выбор ROI matplotlib
+    print("Выберите область на изображении...")
+    print("Инструкция:")
+    print("1. Нажмите 'r' для сброса выделения")
+    print("2. Нажмите 'c' для отмены")
+    print("3. Закройте окно для сохранения")
+    
+    # Получаем ROI через matplotlib
+    roi_coords = plt.ginput(2, timeout=0, show_clicks=True)
+    
+    if len(roi_coords) == 2:
+        x1, y1 = roi_coords[0]
+        x2, y2 = roi_coords[1]
+        x = min(x1, x2)
+        y = min(y1, y2)
+        w = abs(x2 - x1)
+        h = abs(y2 - y1)
+        
+        if w > 10 and h > 10:  # Минимальный размер
+            selected_roi = {'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)}
+            print(f"Выбран новый ROI: {selected_roi}")
+            plt.close()
+            return selected_roi
+    
+    plt.close()
+    
+    # Если не выбран новый ROI, используем существующий
+    if existing_roi:
+        print("Используется существующий ROI")
+        return existing_roi
+    else:
+        print("ROI не выбран")
+        return None
+    
 def main():
     """Основная функция"""
-    # Загружаем конфигурацию
-    config = load_config()
-    if not config:
-        print("Не удалось загрузить конфигурацию")
-        return
-    
-    # Выбираем камеру
-    camera = select_camera(config)
-    if not camera:
-        print("Камера не выбрана")
-        return
-    
-    print(f"\nНастройка ROI для камеры: {camera['name']} ({camera['camera_ip']})")
-    
-    # Выбираем ROI
-    roi = select_roi_from_rtsp(camera)
-    
-    # Сохраняем результат
-    if roi and roi['w'] > 0 and roi['h'] > 0:
-        filename = "roi/roi.xml"
-        save_roi_for_ip(camera['camera_ip'], roi, filename)
-        print(f"ROI успешно сохранен в {os.path.abspath(filename)}")
-    else:
-        print("Сохранение отменено")
+    try:
+        # Загружаем конфигурацию
+        config = load_config()
+        if not config:
+            print("Не удалось загрузить конфигурацию")
+            return
+        
+        # Выбираем камеру
+        camera = select_camera(config)
+        if not camera:
+            print("Камера не выбрана")
+            return
+        
+        print(f"\nНастройка ROI для камеры: {camera['name']} ({camera['camera_ip']})")
+        
+        # Выбираем ROI
+        roi = select_roi_from_rtsp(camera)
+        
+        # Сохраняем результат
+        if roi and roi['w'] > 0 and roi['h'] > 0:
+            filename = "roi/roi.xml"
+            # Создаем директорию если не существует
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            save_roi_for_ip(camera['camera_ip'], roi, filename)
+            print(f"ROI успешно сохранен в {os.path.abspath(filename)}")
+        else:
+            print("Сохранение отменено")
+            
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Гарантируем закрытие всех окон OpenCV
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()

@@ -6,6 +6,7 @@ from logging.handlers import TimedRotatingFileHandler
 from logging import StreamHandler, Formatter
 from datetime import datetime, timedelta
 import glob
+import re
 
 LOG_DIR = "logs"
 LOG_FORMAT = '[%(asctime)s: %(levelname)s] %(message)s'
@@ -19,15 +20,35 @@ def cleanup_old_logs():
         
     cutoff_date = datetime.now() - timedelta(days=LOG_RETENTION_DAYS)
     
-    for log_file in glob.glob(os.path.join(LOG_DIR, "*.log")):
-        file_date_str = os.path.basename(log_file).replace("app_", "").replace(".log", "")
-        try:
-            file_date = datetime.strptime(file_date_str, "%Y-%m-%d")
-            if file_date < cutoff_date:
-                os.remove(log_file)
-                print(f"Удален старый лог-файл: {log_file}")
-        except ValueError:
-            continue
+    # Шаблоны для поиска всех лог-файлов (основные и ротированные)
+    log_patterns = [
+        os.path.join(LOG_DIR, "app_*.log"),
+        os.path.join(LOG_DIR, "app_*.log.*")  # Для ротированных файлов
+    ]
+    
+    for pattern in log_patterns:
+        for log_file in glob.glob(pattern):
+            try:
+                # Извлекаем дату из имени файла
+                filename = os.path.basename(log_file)
+                
+                # Основной файл: app_2024-10-16.log
+                if filename.startswith("app_") and filename.endswith(".log") and not re.search(r'\.log\.\d+$', filename):
+                    date_str = filename.replace("app_", "").replace(".log", "")
+                # Ротированный файл: app_2024-10-16.log.2024-10-16
+                elif re.match(r'app_\d{4}-\d{2}-\d{2}\.log\.\d{4}-\d{2}-\d{2}$', filename):
+                    date_str = filename.split('.')[-1]  # Берем дату из суффикса
+                else:
+                    continue
+                
+                file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                if file_date < cutoff_date:
+                    os.remove(log_file)
+                    print(f"Удален старый лог-файл: {log_file}")
+                    
+            except (ValueError, IndexError):
+                # Пропускаем файлы с некорректным форматом имени
+                continue
 
 def setup_logger():
     """Настройка логгера с ротацией по дням"""
@@ -47,9 +68,10 @@ def setup_logger():
     # Обработчики (только один для каждого назначения)
     handlers = [
         (TimedRotatingFileHandler(
-            filename=os.path.join(LOG_DIR, f"app_{datetime.now().strftime('%Y-%m-%d')}.log"),
+            filename=os.path.join(LOG_DIR, "app.log"),  # Постоянное имя файла
             when="midnight",
-            backupCount=LOG_RETENTION_DAYS,
+            interval=1,
+            backupCount=LOG_RETENTION_DAYS,  # Храним только нужное количество бэкапов
             encoding='utf-8'
         ), logging.INFO),  # Только INFO+ в файл
         

@@ -28,12 +28,7 @@ class ModbusHandler:
         self._thread.daemon = True
 
     async def _send_tags_async(self, tags: List, modbus_cfg: ModbusConfig):
-        """Асинхронная отправка тегов на Modbus сервер.
-        
-        Args:
-            tags: Список обнаруженных тегов
-            modbus_cfg: Конфигурация Modbus для отправки
-        """
+        """Асинхронная отправка тегов на Modbus сервер."""
         try:
             modbus_value = self._encode_tags(tags)
             logger.info(f"Отправка тегов на {modbus_cfg.modbus_server_ip}:{modbus_cfg.register}")
@@ -77,7 +72,7 @@ class ModbusHandler:
                             value=task.status,
                             address=cfg.register,
                             host=cfg.modbus_server_ip
-                        )
+)
                         task.last_sent = current_time
                 
                 await asyncio.sleep(0.1)

@@ -23,6 +23,8 @@ class CameraConfig:
     rtsp: str            # RTSP поток
     index: int           # Уникальный индекс (1-3)
     modbus: ModbusConfig  # Конфигурация Modbus для камеры
+    min_tag_area: float = 100.0  # Минимальная площадь тега
+    max_tag_area: float = 10000.0  # Максимальная площадь тега
 
 class ConfigLoader:
     """Загрузчик конфигурации из YAML файла."""
@@ -91,7 +93,9 @@ class ConfigLoader:
                         modbus=ModbusConfig(
                             modbus_server_ip=str(cam['modbus']['modbus_server_ip']),
                             register=int(cam['modbus']['register'])
-                        )
+                        ),
+                        min_tag_area=float(cam.get('min_tag_area', 100.0)),
+                        max_tag_area=float(cam.get('max_tag_area', 10000.0))
                     )
                 )
             except (ValueError, TypeError, KeyError) as e:

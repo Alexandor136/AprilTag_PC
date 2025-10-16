@@ -2,6 +2,7 @@
 import cv2
 import time
 from camera_utils import tag_processing, frame_utils
+from logger_setup import logger
 
 def open_camera(camera_url, cam_index):
     """
@@ -20,16 +21,16 @@ def open_camera(camera_url, cam_index):
         return None
 
     # Оптимизация параметров VideoCapture
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Минимальный буфер кадров
-    cap.set(cv2.CAP_PROP_FPS, 15)        # Ограничение FPS, если возможно
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  
+    cap.set(cv2.CAP_PROP_FPS, 5)        
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2304)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1296)
 
     return cap
 
 
 def camera_worker(camera_url, detector, frame_rate, output_queue,
-                  stop_event, cam_index, roi):
+                  stop_event, cam_index, roi, min_tag_area=100.0, max_tag_area=10000.0, camera_name="Unknown"):
     """
     Обрабатывает видеопоток с камеры: захват, обрезка ROI, детекция AprilTag,
     добавление текста и отправка в очередь. Отображается полный кадр с
@@ -43,6 +44,9 @@ def camera_worker(camera_url, detector, frame_rate, output_queue,
         stop_event (Event): Событие остановки потока.
         cam_index (int): Индекс камеры.
         roi (tuple): Область интереса (x, y, w, h).
+        min_tag_area (float): Минимальная площадь тега.
+        max_tag_area (float): Максимальная площадь тега.
+        camera_name (str): Название камеры для логирования.
     """
     cap = open_camera(camera_url, cam_index)
     if cap is None:
@@ -67,7 +71,9 @@ def camera_worker(camera_url, detector, frame_rate, output_queue,
         h = int(roi["h"])
         roi_frame = frame[y:y + h, x:x + w]
 
-        processed_roi, largest_tags = tag_processing.process_frame(roi_frame, detector)
+        processed_roi, largest_tags = tag_processing.process_frame(
+            roi_frame, detector, min_tag_area, max_tag_area, camera_name
+        )
 
         display_frame[y:y + h, x:x + w] = processed_roi
 

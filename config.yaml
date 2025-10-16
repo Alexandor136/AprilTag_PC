@@ -1,32 +1,15 @@
 modbus_status:
-  - modbus_server_ip: "192.168.17.23"
-    register: 1000
-    interval: 1
-  - modbus_server_ip: "192.168.17.40"
+  - modbus_server_ip: "172.16.9.100"
     register: 1000
     interval: 1
 
 cameras:
-  - name: "Камера 1"
-    camera_ip: "192.168.17.86"  # IP камеры
-    rtsp: "rtsp://admin:kZx_vN8!@192.168.17.86/stream1"
-    index: 1                   # Уникальный индекс (1-3)
+  - name: "Камера 4"
+    camera_ip: "172.16.9.45"  # IP камеры
+    rtsp: "rtsp://admin:kZx_vN8!@172.16.9.45/Streaming/Channels/101"
+    index: 0                 # Уникальный индекс (1-3)
+    min_tag_area: 100.0       # Минимальная площадь тега (пиксели)
+    max_tag_area: 5000.0      # Максимальная площадь тега (пиксели)
     modbus:
       register: 1001           # Регистр Modbus для этой камеры
-      modbus_server_ip: "192.168.17.23" 
-
-  - name: "Камера 2"
-    camera_ip: "192.168.17.91"  # IP камеры
-    rtsp: "rtsp://admin:kZx_vN8!@192.168.17.91/stream1"
-    index: 2                   # Уникальный индекс (1-3)
-    modbus:
-      register: 1002           # Регистр Modbus для этой камеры
-      modbus_server_ip: "192.168.17.40" 
-
-  - name: "Камера 3"
-    camera_ip: "192.168.17.88"  # IP камеры
-    rtsp: "rtsp://admin:kZx_vN8!@192.168.17.88/stream1"
-    index: 3                   # Уникальный индекс (1-3)
-    modbus:
-      register: 1003           # Регистр Modbus для этой камеры
-      modbus_server_ip: "192.168.17.40"
+      modbus_server_ip: "172.16.9.100"
