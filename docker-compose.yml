@@ -4,7 +4,7 @@ services:
   detector_april_tag:
     build: . # Сборка контенера
     network_mode: host
-    #image: detector_april_tag # Использование уже имеющегося контенера
+    image: 9221556df7ea # Использование уже имеющегося контенера
     volumes:
       - ./config.yaml:/app/config.yaml
       - ./roi:/app/roi
