@@ -17,14 +17,18 @@ class ModbusConfig:
 
 @dataclass
 class CameraConfig:
-    """Конфигурация камеры."""
-    name: str            # Название камеры
-    camera_ip: str       # IP адрес камеры
-    rtsp: str            # RTSP поток
-    index: int           # Уникальный индекс (1-3)
-    modbus: ModbusConfig  # Конфигурация Modbus для камеры
-    min_tag_area: float = 100.0  # Минимальная площадь тега
-    max_tag_area: float = 10000.0  # Максимальная площадь тега
+    """Конфигурация камеры для работы через снимки."""
+    name: str
+    camera_ip: str
+    snapshot_url: str  # URL для получения снимков
+    username: str
+    password: str
+    index: int
+    modbus: ModbusConfig  # Без значения по умолчанию - должно быть ПЕРЕД полями с значениями по умолчанию
+    interval: float = 0.25  # Интервал между снимками (сек)
+    timeout: float = 2.0    # Таймаут запроса
+    min_tag_area: float = 100.0
+    max_tag_area: float = 10000.0
 
 class ConfigLoader:
     """Загрузчик конфигурации из YAML файла."""
@@ -72,7 +76,7 @@ class ConfigLoader:
         ]
 
     def _load_camera_configs(self, config: Dict[str, Any]) -> List[CameraConfig]:
-        """Загрузка конфигураций камер с валидацией."""
+        """Загрузка конфигураций камер для работы через снимки."""
         if 'cameras' not in config:
             raise ValueError("Отсутствует секция 'cameras' в конфигурации")
 
@@ -80,7 +84,7 @@ class ConfigLoader:
         for cam in config['cameras']:
             try:
                 # Валидация обязательных полей
-                required = ['name', 'camera_ip', 'rtsp', 'index', 'modbus']
+                required = ['name', 'camera_ip', 'snapshot_url', 'username', 'password', 'index', 'modbus']
                 if not all(field in cam for field in required):
                     raise ValueError("Отсутствуют обязательные поля в конфигурации камеры")
 
@@ -88,12 +92,16 @@ class ConfigLoader:
                     CameraConfig(
                         name=str(cam['name']),
                         camera_ip=str(cam['camera_ip']),
-                        rtsp=str(cam['rtsp']),
+                        snapshot_url=str(cam['snapshot_url']),
+                        username=str(cam['username']),
+                        password=str(cam['password']),
                         index=int(cam['index']),
                         modbus=ModbusConfig(
                             modbus_server_ip=str(cam['modbus']['modbus_server_ip']),
                             register=int(cam['modbus']['register'])
                         ),
+                        interval=float(cam.get('interval', 0.25)),
+                        timeout=float(cam.get('timeout', 2.0)),
                         min_tag_area=float(cam.get('min_tag_area', 100.0)),
                         max_tag_area=float(cam.get('max_tag_area', 10000.0))
                     )
@@ -104,5 +112,5 @@ class ConfigLoader:
 
         if not camera_configs:
             raise ValueError("Не найдено ни одной валидной конфигурации камеры")
-            
+                
         return camera_configs

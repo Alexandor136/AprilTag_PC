@@ -1,45 +1,40 @@
-# camera_processing.py
 import time
-import queue
 import threading
+import queue
 import cv2
 from pupil_apriltags import Detector
 from dataclasses import dataclass
+
 from .tag_processing import process_frame
 from .frame_utils import prepare_text_frame
+from .snapshot_client import SnapshotClient  # Новый импорт
 from network.modbus_handler import ModbusHandler
 from roi.read_roi import load_roi_for_ip
 from logger_setup import logger
-
 
 @dataclass
 class DetectedTag:
     tag_id: int
     camera_index: int
 
-
 class CameraProcessor:
     def __init__(self, camera_configs=None, roi_file='roi/roi.xml'):
-        """
-        Инициализация процессора камер.
-
-        Args:
-            camera_configs (list): Список конфигураций камер.
-            roi_file (str): Путь к файлу с ROI.
-        """
         self.camera_configs = camera_configs or []
         self.roi_file = roi_file
         self.modbus_handler = ModbusHandler()
-        self.output_queue = queue.Queue(maxsize=3)  # Ограничиваем размер очереди для пропуска кадров
+        self.output_queue = queue.Queue(maxsize=2)  # Еще меньше буфер
         self.stop_event = threading.Event()
         self.threads = []
-        self.detector_lock = threading.Lock()  # Блокировка для детектора
+        self.detector_lock = threading.Lock()
         self.last_sent_tags = {}
+        
+        # Клиенты для снимков
+        self.snapshot_clients = {}
 
-        # Инициализация детектора один раз
+        # Инициализация детектора
         self.detector = Detector(
             families='tag36h11',
-            nthreads=4,
+            nthreads=2,  # Меньше потоков для стабильности
             quad_decimate=1.0,
             quad_sigma=0.0,
             refine_edges=1,
@@ -48,11 +43,17 @@ class CameraProcessor:
         )
 
     def start_processing(self):
-        """
-        Запуск потоков обработки камер и Modbus.
-        """
+        """Запуск потоков обработки камер и Modbus."""
         if not self.camera_configs:
             raise ValueError("Не заданы конфигурации камер!")
+
+        logger.info(f"Запуск обработки {len(self.camera_configs)} камер через снимки (4 FPS)")
+
+        # Инициализация клиентов снимков
+        for config in self.camera_configs:
+            client = SnapshotClient(config)
+            self.snapshot_clients[config.index] = client
+            client.start()
 
         # Запуск Modbus потока
         modbus_thread = threading.Thread(
@@ -62,10 +63,10 @@ class CameraProcessor:
         modbus_thread.start()
         self.threads.append(modbus_thread)
 
-        # Запуск потока для каждой камеры
+        # Запуск потока обработки для каждой камеры
         for config in self.camera_configs:
             thread = threading.Thread(
-                target=self._camera_worker,
+                target=self._processing_worker,
                 args=(config,),
                 daemon=True
             )
@@ -73,9 +74,7 @@ class CameraProcessor:
             self.threads.append(thread)
 
     def _modbus_sender_worker(self):
-        """
-        Поток для периодической отправки тегов в Modbus.
-        """
+        """Поток для периодической отправки тегов в Modbus."""
         while not self.stop_event.is_set():
             try:
                 all_tags = []
@@ -94,107 +93,78 @@ class CameraProcessor:
                             config.modbus
                         )
 
-                time.sleep(1)
+                time.sleep(1)  # Отправка каждую секунду
+                
             except Exception as e:
                 logger.warning(f"Ошибка в потоке отправки Modbus: {e}")
+                time.sleep(5)
 
-    def _camera_worker(self, config):
-        """
-        Поток захвата и обработки кадров с камеры.
-
-        Добавлена обработка переподключения и пропуск кадров при перегрузке.
-
-        Args:
-            config: Конфигурация камеры.
-        """
-        cap = None
-
-        def open_capture():
-            """Открыть VideoCapture с оптимальными параметрами."""
-            cap_local = cv2.VideoCapture(config.rtsp, cv2.CAP_FFMPEG)
-            if not cap_local.isOpened():
-                return None
-
-            # Оптимизация параметров VideoCapture
-            cap_local.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Минимальный буфер кадров
-            cap_local.set(cv2.CAP_PROP_FPS, 15)        # Ограничение FPS, если возможно
-            cap_local.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            cap_local.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            return cap_local
-
+    def _processing_worker(self, config):
+        """Поток обработки снимков с камеры с синхронизацией."""
+        client = self.snapshot_clients[config.index]
+        last_processed_frame_id = 0
+        
         while not self.stop_event.is_set():
-            if cap is None:
-                cap = open_capture()
-                if cap is None:
-                    logger.warning(f"Не удалось подключиться к {config.name} ({config.camera_ip}), повтор через 5 сек...")
-                    time.sleep(5)
-                    continue
-                else:
-                    logger.info(f"Подключение к {config.name} ({config.camera_ip}) успешно")
-
-            roi = load_roi_for_ip(config.camera_ip, self.roi_file) or {
-                'x': 0, 'y': 0,
-                'w': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                'h': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            }
-
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                logger.warning(f"Потеря кадра с {config.name} ({config.camera_ip}), переподключение...")
-                cap.release()
-                cap = None
-                time.sleep(2)
-                continue
-
             try:
-                # Обработка кадра с параметрами площади тега
-                processed_frame, detected_tags = self._process_frame(
-                    frame, roi, config.min_tag_area, config.max_tag_area, config.name
-                )
+                # Ждем новый кадр (синхронизация с получением)
+                if client.wait_for_new_frame(timeout=1.0):
+                    client.clear_new_frame_event()
+                    
+                    # Получаем свежий кадр
+                    frame = client.get_frame()
+                    
+                    if frame is None:
+                        continue
 
-                # Пробуем положить в очередь без блокировки, пропуская кадры при переполнении
-                try:
-                    self.output_queue.put_nowait((config.index, processed_frame))
-                except queue.Full:
-                    # Очередь переполнена - пропускаем кадр
-                    pass
+                    # Загружаем ROI
+                    roi = load_roi_for_ip(config.camera_ip, self.roi_file) or {
+                        'x': 0, 'y': 0,
+                        'w': frame.shape[1],
+                        'h': frame.shape[0]
+                    }
 
-                # Сохраняем обнаруженные теги с блокировкой
-                with threading.Lock():
-                    if detected_tags:
-                        self.last_sent_tags[config.index] = list(detected_tags.keys())
-                    else:
-                        self.last_sent_tags[config.index] = []
+                    # Обрабатываем кадр
+                    processed_frame, detected_tags = self._process_frame(
+                        frame, roi, config.min_tag_area, config.max_tag_area, config.name
+                    )
+
+                    # Отправляем в очередь отображения
+                    try:
+                        self.output_queue.put_nowait((config.index, processed_frame))
+                    except queue.Full:
+                        pass  # Пропускаем кадр если очередь полна
+
+                    # Сохраняем обнаруженные теги
+                    with threading.Lock():
+                        if detected_tags:
+                            self.last_sent_tags[config.index] = list(detected_tags.keys())
+                        else:
+                            self.last_sent_tags[config.index] = []
+                            
+                else:
+                    # Таймаут ожидания нового кадра
+                    time.sleep(0.01)
 
             except Exception as e:
-                logger.warning(f"Ошибка обработки кадра камеры {config.name}: {e}")
+                logger.warning(f"Ошибка обработки кадра {config.name}: {e}")
+                time.sleep(0.1)
 
-        if cap:
-            cap.release()
-
-    def _process_frame(self, frame, roi, min_tag_area=100.0, max_tag_area=10000.0, camera_name="Unknown"):
-        """
-        Обработка кадра: выделение ROI, детекция AprilTag и отрисовка.
-
-        Args:
-            frame (np.ndarray): Исходный кадр.
-            roi (dict): Область интереса.
-            min_tag_area (float): Минимальная площадь тега.
-            max_tag_area (float): Максимальная площадь тега.
-            camera_name (str): Название камеры для логирования.
-
-        Returns:
-            tuple: (обработанный кадр, словарь обнаруженных тегов)
-        """
+    def _process_frame(self, frame, roi, min_tag_area, max_tag_area, camera_name):
+        """Обработка кадра: ROI, детекция AprilTag и отрисовка."""
         display_frame = frame.copy()
         x, y, w, h = roi['x'], roi['y'], roi['w'], roi['h']
 
+        # Проверка границ
         h_img, w_img = frame.shape[:2]
         x, y = max(0, x), max(0, y)
         w, h = min(w, w_img - x), min(h, h_img - y)
 
+        if w <= 0 or h <= 0:
+            return display_frame, {}
+
         roi_frame = frame[y:y + h, x:x + w]
 
+        # Детекция тегов
         with self.detector_lock:
             processed_roi, tags = process_frame(
                 roi_frame, self.detector, min_tag_area, max_tag_area, camera_name
@@ -203,6 +173,7 @@ class CameraProcessor:
         display_frame[y:y + h, x:x + w] = processed_roi
         cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
+        # Добавление информации о тегах
         if tags:
             text_lines = [f"ID: {tag_id}" for tag_id in tags.keys()]
             display_frame = prepare_text_frame(display_frame, text_lines)
@@ -210,20 +181,25 @@ class CameraProcessor:
         return display_frame, tags
 
     def stop_processing(self):
-        """
-        Остановка потоков.
-        """
+        """Остановка всех потоков."""
         self.stop_event.set()
+        
+        # Останавливаем клиенты снимков
+        for client in self.snapshot_clients.values():
+            client.stop()
+        
+        # Ожидаем завершения потоков
         for t in self.threads:
             if t.is_alive():
                 t.join(timeout=1.0)
+                
         self.modbus_handler.stop()
+        logger.info("Все потоки обработки остановлены")
 
     def is_running(self):
-        """
-        Проверка состояния работы.
-
-        Returns:
-            bool: True если не остановлен.
-        """
         return not self.stop_event.is_set()
+    
+    def get_client_stats(self, camera_index):
+        """Получение статистики клиента."""
+        client = self.snapshot_clients.get(camera_index)
+        return client.get_stats() if client else None

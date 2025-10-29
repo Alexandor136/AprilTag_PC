@@ -1,15 +1,18 @@
 modbus_status:
-  - modbus_server_ip: "172.16.9.100"
-    register: 1000
+  - modbus_server_ip: "192.168.3.239"
+    register: 0
     interval: 1
 
 cameras:
-  - name: "Камера 4"
-    camera_ip: "192.168.3.238"  # IP камеры
-    rtsp: "rtsp://admin:kZx_vN8!@192.168.3.238/Streaming/Channels/101"
-    index: 0                 # Уникальный индекс (1-3)
-    min_tag_area: 300       # Минимальная площадь тега (пиксели)
-    max_tag_area: 5000      # Максимальная площадь тега (пиксели)
+  - name: "Камера 1"
+    camera_ip: "192.168.3.238"
+    snapshot_url: "http://192.168.3.238/ISAPI/Streaming/channels/101/picture?snapShotImageType=JPEG"
+    username: "admin"
+    password: "kZx_vN8!"
+    index: 0
+    interval: 0.25  # 250ms = 4 FPS
+    timeout: 2
+    max_tag_area: 50000
     modbus:
-      register: 1001           # Регистр Modbus для этой камеры
-      modbus_server_ip: "172.16.9.100"
+      register: 1
+      modbus_server_ip: "192.168.3.239"

@@ -5,7 +5,9 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-import matplotlib
+import requests
+from requests.auth import HTTPDigestAuth
+import time
 
 def load_config(config_path="config.yaml"):
     """Загружаем конфигурацию из YAML файла"""
@@ -124,25 +126,73 @@ def load_existing_roi(ip, filename="roi/roi.xml"):
         print(f"Ошибка загрузки существующего ROI: {e}")
         return None
 
-def select_roi_from_rtsp(camera_config):
-    """Выбираем ROI из RTSP потока используя matplotlib"""
-    if not camera_config or 'rtsp' not in camera_config:
+def get_snapshot_from_camera(camera_config):
+    """Получаем снимок с камеры через HTTP запрос"""
+    if not camera_config:
         print("Неверная конфигурация камеры")
         return None
 
-    rtsp_url = camera_config['rtsp']
-    cap = cv2.VideoCapture(rtsp_url)
+    # Используем snapshot_url если есть, иначе формируем стандартный
+    if 'snapshot_url' in camera_config and camera_config['snapshot_url']:
+        url = camera_config['snapshot_url']
+    else:
+        # Стандартный URL для снимков Hikvision
+        url = f"http://{camera_config['camera_ip']}/ISAPI/Streaming/channels/101/picture?snapShotImageType=JPEG"
     
-    if not cap.isOpened():
-        print(f"Ошибка подключения к RTSP потоку: {rtsp_url}")
-        return None
+    username = camera_config.get('username', 'admin')
+    password = camera_config.get('password', '')
+    
+    print(f"Подключаемся к камере {camera_config['name']}...")
+    print(f"URL: {url}")
+    
+    try:
+        # Создаем сессию с аутентификацией
+        session = requests.Session()
+        session.auth = HTTPDigestAuth(username, password)
+        session.timeout = 10
+        
+        # Получаем снимок
+        response = session.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            # Конвертируем в изображение OpenCV
+            img_array = np.frombuffer(response.content, dtype=np.uint8)
+            frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            
+            if frame is not None:
+                print(f"Успешно получен снимок: {frame.shape[1]}x{frame.shape[0]}")
+                return frame
+            else:
+                print("Ошибка: не удалось декодировать изображение")
+        else:
+            print(f"Ошибка HTTP: {response.status_code}")
+            # Пробуем альтернативный URL
+            if response.status_code == 404 or response.status_code == 401:
+                print("Пробуем альтернативный URL...")
+                alt_url = f"http://{camera_config['camera_ip']}/ISAPI/Streaming/channels/1/picture"
+                response = session.get(alt_url, timeout=10)
+                if response.status_code == 200:
+                    img_array = np.frombuffer(response.content, dtype=np.uint8)
+                    frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                    if frame is not None:
+                        print(f"Успешно получен снимок с альтернативного URL: {frame.shape[1]}x{frame.shape[0]}")
+                        return frame
+                
+    except requests.exceptions.Timeout:
+        print("Таймаут подключения к камере")
+    except requests.exceptions.ConnectionError:
+        print("Ошибка соединения с камерой")
+    except Exception as e:
+        print(f"Ошибка получения снимка: {e}")
+    
+    return None
 
-    # Получаем кадр
-    ret, frame = cap.read()
-    cap.release()
-    
-    if not ret:
-        print("Не удалось получить кадр из потока")
+def select_roi_from_snapshot(camera_config):
+    """Выбираем ROI из снимка камеры используя matplotlib"""
+    # Получаем снимок с камеры
+    frame = get_snapshot_from_camera(camera_config)
+    if frame is None:
+        print("Не удалось получить снимок с камеры")
         return None
 
     # Загружаем существующий ROI
@@ -155,7 +205,7 @@ def select_roi_from_rtsp(camera_config):
     fig, ax = plt.subplots(figsize=(12, 8))
     ax.imshow(frame_rgb)
     ax.set_title(f'Выберите ROI для {camera_config["name"]}\n'
-                f'Кликните и протяните для выбора области\n'
+                f'Кликните дважды для определения двух противоположных углов\n'
                 f'Закройте окно для сохранения')
     
     # Рисуем существующий ROI красным
@@ -163,7 +213,7 @@ def select_roi_from_rtsp(camera_config):
         rect = Rectangle((existing_roi['x'], existing_roi['y']), 
                         existing_roi['w'], existing_roi['h'],
                         linewidth=2, edgecolor='red', facecolor='none',
-                        label='Existing ROI')
+                        label='Существующий ROI')
         ax.add_patch(rect)
         ax.legend()
     
@@ -171,45 +221,70 @@ def select_roi_from_rtsp(camera_config):
     plt.ion()
     plt.show()
     
-    # Используем встроенный выбор ROI matplotlib
-    print("Выберите область на изображении...")
     print("Инструкция:")
-    print("1. Нажмите 'r' для сброса выделения")
-    print("2. Нажмите 'c' для отмены")
+    print("1. Кликните ЛЕВОЙ кнопкой мыши в первый угол ROI")
+    print("2. Кликните ЛЕВОЙ кнопкой мыши во второй противоположный угол")
     print("3. Закройте окно для сохранения")
+    print("4. Нажмите 'q' в окне для отмены")
     
-    # Получаем ROI через matplotlib
-    roi_coords = plt.ginput(2, timeout=0, show_clicks=True)
-    
-    if len(roi_coords) == 2:
-        x1, y1 = roi_coords[0]
-        x2, y2 = roi_coords[1]
-        x = min(x1, x2)
-        y = min(y1, y2)
-        w = abs(x2 - x1)
-        h = abs(y2 - y1)
+    try:
+        # Получаем ROI через matplotlib ginput
+        roi_coords = plt.ginput(2, timeout=0, show_clicks=True)
         
-        if w > 10 and h > 10:  # Минимальный размер
-            selected_roi = {'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)}
-            print(f"Выбран новый ROI: {selected_roi}")
-            plt.close()
-            return selected_roi
-    
-    plt.close()
+        if len(roi_coords) == 2:
+            x1, y1 = roi_coords[0]
+            x2, y2 = roi_coords[1]
+            x = min(x1, x2)
+            y = min(y1, y2)
+            w = abs(x2 - x1)
+            h = abs(y2 - y1)
+            
+            # Проверяем минимальный размер
+            if w > 10 and h > 10:
+                selected_roi = {'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)}
+                print(f"Выбран новый ROI: {selected_roi}")
+                plt.close()
+                return selected_roi
+            else:
+                print("Слишком маленький ROI, минимальный размер 10x10 пикселей")
+        
+        plt.close()
+        
+    except Exception as e:
+        print(f"Ошибка при выборе ROI: {e}")
+        plt.close()
     
     # Если не выбран новый ROI, используем существующий
     if existing_roi:
-        print("Используется существующий ROI")
-        return existing_roi
-    else:
-        print("ROI не выбран")
-        return None
+        use_existing = input("Использовать существующий ROI? (y/n): ").lower().strip()
+        if use_existing == 'y':
+            print("Используется существующий ROI")
+            return existing_roi
     
+    print("ROI не выбран")
+    return None
+
+def test_camera_connection(camera_config):
+    """Тестируем подключение к камере"""
+    print(f"Тестируем подключение к {camera_config['name']}...")
+    
+    frame = get_snapshot_from_camera(camera_config)
+    if frame is not None:
+        print("✓ Подключение успешно")
+        return True
+    else:
+        print("✗ Ошибка подключения")
+        return False
+
 def main():
     """Основная функция"""
     try:
         # Загружаем конфигурацию
-        config = load_config()
+        config_path = input("Введите путь к config.yaml (по умолчанию config.yaml): ").strip()
+        if not config_path:
+            config_path = "config.yaml"
+            
+        config = load_config(config_path)
         if not config:
             print("Не удалось загрузить конфигурацию")
             return
@@ -222,8 +297,14 @@ def main():
         
         print(f"\nНастройка ROI для камеры: {camera['name']} ({camera['camera_ip']})")
         
+        # Тестируем подключение
+        if not test_camera_connection(camera):
+            retry = input("Повторить попытку подключения? (y/n): ").lower().strip()
+            if retry != 'y':
+                return
+        
         # Выбираем ROI
-        roi = select_roi_from_rtsp(camera)
+        roi = select_roi_from_snapshot(camera)
         
         # Сохраняем результат
         if roi and roi['w'] > 0 and roi['h'] > 0:
@@ -231,7 +312,24 @@ def main():
             # Создаем директорию если не существует
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             save_roi_for_ip(camera['camera_ip'], roi, filename)
-            print(f"ROI успешно сохранен в {os.path.abspath(filename)}")
+            print(f"✓ ROI успешно сохранен в {os.path.abspath(filename)}")
+            
+            # Показываем предпросмотр
+            preview = input("Показать предпросмотр с ROI? (y/n): ").lower().strip()
+            if preview == 'y':
+                frame = get_snapshot_from_camera(camera)
+                if frame is not None:
+                    # Рисуем ROI на изображении
+                    x, y, w, h = roi['x'], roi['y'], roi['w'], roi['h']
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 3)
+                    cv2.putText(frame, f"ROI: {w}x{h}", (x, y-10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                    
+                    # Показываем изображение
+                    cv2.imshow(f"ROI Preview - {camera['name']}", frame)
+                    print("Нажмите любую клавишу для закрытия окна...")
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
         else:
             print("Сохранение отменено")
             
@@ -240,8 +338,9 @@ def main():
         import traceback
         traceback.print_exc()
     finally:
-        # Гарантируем закрытие всех окон OpenCV
+        # Гарантируем закрытие всех окон
         cv2.destroyAllWindows()
+        plt.close('all')
 
 if __name__ == "__main__":
     main()
